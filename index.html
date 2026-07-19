@@ -403,10 +403,31 @@
 
   /* portrait fallback for solo and turns only; 2P modes are landscape games */
   @media (orientation: portrait) {
+    /* the topbar cannot fit one row on a phone; wrap controls onto a second row */
+    #topbar {
+      height: auto;
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      row-gap: 4px;
+    }
+    #topbar h1 { font-size: 15px; }
+    #topbar .left { gap: 8px; }
+    #topbar .right {
+      gap: 8px;
+      margin-left: auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    #modes button { padding: 5px 9px; font-size: 12px; }
+    #progress, #timer { font-size: 12px; }
+    #bandCountLabel { min-width: 54px; font-size: 12px; }
+    #soundBtn { padding: 6px 10px; font-size: 12px; }
+    #hint { top: 94px; }
+    #stage { padding-top: 116px; }
     #stage.mode-solo, #stage.mode-turns {
       flex-direction: column;
       gap: 3vmin;
-      padding-top: 58px;
+      padding-top: 116px;
     }
     #stage.mode-solo .plate, #stage.mode-turns .plate {
       width: min(62vw, 34vh);
