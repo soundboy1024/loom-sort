@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Loom Sort</title>
+<style>
+  :root {
+    --table: #f1ece4;
+    --plate: #ffffff;
+    --ink: #5c554b;
+    --ink-soft: #a39b8e;
+    --box-plastic: rgba(255, 255, 255, 0.55);
+    --cell-plastic: rgba(255, 255, 255, 0.65);
+    --cell-line: rgba(190, 200, 210, 0.55);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% 10%, rgba(255,255,255,0.5), rgba(255,255,255,0) 60%),
+      var(--table);
+    color: var(--ink);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px;
+    z-index: 40;
+    pointer-events: none;
+  }
+  #topbar h1 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+  #topbar .left, #topbar .right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+  }
+
+  #modes {
+    display: flex;
+    gap: 2px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 999px;
+    padding: 2px;
+  }
+  #modes button {
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    padding: 5px 12px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #modes button.active {
+    background: #fff;
+    color: var(--ink);
+    box-shadow: 0 1px 3px rgba(90, 80, 60, 0.18);
+  }
+  #modes button:focus-visible {
+    outline: 2px solid #7aa7d9;
+    outline-offset: 1px;
+  }
+
+  #progress, #timer {
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  #stepper {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 999px;
+    padding: 2px;
+  }
+  #stepper button {
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    width: 34px;
+    height: 30px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #stepper button:active { background: rgba(0,0,0,0.06); }
+  #stepper button:focus-visible {
+    outline: 2px solid #7aa7d9;
+    outline-offset: 1px;
+  }
+  #bandCountLabel {
+    font-size: 13px;
+    min-width: 66px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  #soundBtn {
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink);
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 999px;
+    padding: 6px 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #soundBtn:focus-visible {
+    outline: 2px solid #7aa7d9;
+    outline-offset: 2px;
+  }
+
+  #hint {
+    position: fixed;
+    top: 56px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 14px;
+    color: var(--ink-soft);
+    z-index: 30;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+  #hint.gone { opacity: 0; }
+
+  /* ---- stage ---- */
+  #stage {
+    position: fixed;
+    inset: 0;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3vmin;
+    padding: 64px 2vmin 2vmin;
+  }
+
+  .plate {
+    position: relative;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 38% 30%, #ffffff 0%, #fdfdfc 55%, #f2f0ec 100%);
+    box-shadow:
+      0 14px 30px rgba(90, 80, 60, 0.16),
+      0 3px 8px rgba(90, 80, 60, 0.10),
+      inset 0 0 0 1px rgba(0,0,0,0.03);
+    flex: 0 0 auto;
+  }
+  .plate::after {
+    content: "";
+    position: absolute;
+    inset: 7%;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 2px 10px rgba(120, 110, 90, 0.14),
+      inset 0 -1px 2px rgba(255,255,255,0.9);
+    pointer-events: none;
+  }
+
+  .boxwrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+  .boxlabel {
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding-left: 6px;
+    min-height: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pbox {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border-radius: 14px;
+    background: var(--box-plastic);
+    box-shadow:
+      0 14px 30px rgba(90, 80, 60, 0.14),
+      inset 0 1px 0 rgba(255,255,255,0.9),
+      inset 0 0 0 1px rgba(190, 200, 210, 0.4);
+  }
+
+  /* solo and turns: one big plate, one wide box */
+  #stage.mode-solo .plate, #stage.mode-turns .plate {
+    width: min(44vmin, 78vh);
+    height: min(44vmin, 78vh);
+    width: min(44svmin, 78svh);
+    height: min(44svmin, 78svh);
+  }
+  #stage.mode-solo .pbox, #stage.mode-turns .pbox {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    width: min(48vw, 76vh * 4 / 3);
+    width: min(48vw, 76svh * 4 / 3);
+    aspect-ratio: 4 / 3;
+    max-height: 76vh;
+    max-height: 76svh;
+  }
+
+  /* race: box, shared plate, box */
+  #stage.mode-race .plate {
+    width: min(34vmin, 60vh);
+    height: min(34vmin, 60vh);
+    width: min(34svmin, 60svh);
+    height: min(34svmin, 60svh);
+  }
+  #stage.mode-race .pbox {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    width: min(27vw, 58vh * 3 / 4);
+    width: min(27vw, 58svh * 3 / 4);
+    aspect-ratio: 3 / 4;
+    max-height: 58vh;
+    max-height: 58svh;
+  }
+
+  /* split: two mini tables side by side */
+  #stage.mode-split { gap: 2vmin; }
+  .half {
+    display: flex;
+    align-items: center;
+    gap: 1.5vmin;
+    flex: 0 0 auto;
+  }
+  .half + .half {
+    border-left: 1px solid rgba(0,0,0,0.07);
+    padding-left: 2vmin;
+  }
+  #stage.mode-split .plate {
+    width: min(17vw, 40vh);
+    height: min(17vw, 40vh);
+    width: min(17vw, 40svh);
+    height: min(17vw, 40svh);
+  }
+  #stage.mode-split .pbox {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    width: min(27vw, 52vh * 4 / 3);
+    width: min(27vw, 52svh * 4 / 3);
+    aspect-ratio: 4 / 3;
+    max-height: 52vh;
+    max-height: 52svh;
+  }
+
+  .cell {
+    position: relative;
+    border-radius: 8px;
+    background: var(--cell-plastic);
+    box-shadow:
+      inset 0 0 0 1px var(--cell-line),
+      inset 0 3px 8px rgba(120, 130, 145, 0.10);
+    overflow: hidden;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+  }
+  .cell .ghost {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .cell.filled .ghost { opacity: 0; }
+  .cell.hot {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow:
+      inset 0 0 0 2px var(--hot-color, #999),
+      inset 0 3px 8px rgba(120, 130, 145, 0.08);
+  }
+  .cell .count {
+    position: absolute;
+    right: 6px;
+    bottom: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: rgba(255,255,255,0.8);
+    border-radius: 999px;
+    padding: 1px 7px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .cell.filled .count { opacity: 1; }
+  .cell .mini { position: absolute; pointer-events: none; }
+  @keyframes cellNudge {
+    0%, 100% { transform: translateX(0); }
+    30% { transform: translateX(-3px); }
+    65% { transform: translateX(3px); }
+  }
+  .cell.nudge { animation: cellNudge 0.3s ease; }
+  @keyframes cellPop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.035); }
+    100% { transform: scale(1); }
+  }
+  .cell.pop { animation: cellPop 0.25s ease; }
+
+  .band {
+    position: fixed;
+    left: 0; top: 0;
+    width: 58px;
+    height: 58px;
+    will-change: transform;
+    cursor: grab;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    filter: drop-shadow(0 1px 1px rgba(80, 70, 50, 0.25));
+  }
+  .band.lifted {
+    cursor: grabbing;
+    filter: drop-shadow(0 10px 10px rgba(80, 70, 50, 0.3));
+  }
+  .band svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+  #done {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    background: rgba(241, 236, 228, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.9s ease;
+  }
+  #done.show { opacity: 1; pointer-events: auto; }
+  #doneCard {
+    background: rgba(255,255,255,0.92);
+    border-radius: 18px;
+    padding: 34px 46px;
+    text-align: center;
+    box-shadow: 0 18px 44px rgba(90, 80, 60, 0.20);
+    transform: translateY(10px);
+    transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.3, 1);
+    max-width: 80vw;
+  }
+  #done.show #doneCard { transform: translateY(0); }
+  #doneTitle {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  #doneStat {
+    display: block;
+    color: var(--ink-soft);
+    font-size: 13px;
+    margin-bottom: 20px;
+    white-space: pre-line;
+  }
+  #spillBtn {
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: #6fae8f;
+    border: none;
+    border-radius: 999px;
+    padding: 11px 28px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #spillBtn:focus-visible {
+    outline: 2px solid #46785f;
+    outline-offset: 3px;
+  }
+
+  /* portrait fallback for solo and turns only; 2P modes are landscape games */
+  @media (orientation: portrait) {
+    #stage.mode-solo, #stage.mode-turns {
+      flex-direction: column;
+      gap: 3vmin;
+      padding-top: 58px;
+    }
+    #stage.mode-solo .plate, #stage.mode-turns .plate {
+      width: min(62vw, 34vh);
+      height: min(62vw, 34vh);
+      width: min(62vw, 34svh);
+      height: min(62vw, 34svh);
+    }
+    #stage.mode-solo .pbox, #stage.mode-turns .pbox {
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      width: min(94vw, 46vh * 3 / 4);
+      width: min(94vw, 46svh * 3 / 4);
+      aspect-ratio: 3 / 4;
+      max-height: 52vh;
+      max-height: 52svh;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cell.nudge, .cell.pop { animation: none; }
+    #done, #doneCard { transition-duration: 0.1s; }
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="left">
+    <h1>Loom Sort</h1>
+    <div id="modes" aria-label="game mode">
+      <button data-mode="solo" class="active">solo</button>
+      <button data-mode="race">race</button>
+      <button data-mode="split">split</button>
+      <button data-mode="turns">turns</button>
+    </div>
+  </div>
+  <div class="right">
+    <span id="timer"></span>
+    <span id="progress"></span>
+    <div id="stepper" aria-label="spill size">
+      <button id="fewerBtn" aria-label="fewer bands">&#8722;</button>
+      <span id="bandCountLabel"></span>
+      <button id="moreBtn" aria-label="more bands">+</button>
+    </div>
+    <button id="soundBtn" aria-label="toggle sound">sound: on</button>
+  </div>
+</div>
+<div id="hint"></div>
+
+<div id="stage"></div>
+
+<div id="done">
+  <div id="doneCard">
+    <p id="doneTitle"></p>
+    <small id="doneStat"></small>
+    <button id="spillBtn">Spill again</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var COLORS = [
+    { name: "purple",   hex: "#9b4fd6" },
+    { name: "hot pink", hex: "#ec4899" },
+    { name: "red",      hex: "#e0243c" },
+    { name: "orange",   hex: "#f97316" },
+    { name: "yellow",   hex: "#f2cf1d" },
+    { name: "lime",     hex: "#a3d635" },
+    { name: "green",    hex: "#1fa04d" },
+    { name: "teal",     hex: "#12a5a0" },
+    { name: "sky",      hex: "#6ecbf5" },
+    { name: "blue",     hex: "#2f5fd9" },
+    { name: "black",    hex: "#2c2c30" },
+    { name: "white",    hex: "#fbfbf9" }
+  ];
+  var BAND_SIZE = 58;
+  var VISIBLE_CAP = 50;
+  var COUNT_MIN = 10;
+  var COUNT_MAX = 200;
+  var COUNT_STEP = 10;
+
+  var stage = document.getElementById("stage");
+  var hint = document.getElementById("hint");
+  var progressEl = document.getElementById("progress");
+  var timerEl = document.getElementById("timer");
+  var doneEl = document.getElementById("done");
+  var doneTitle = document.getElementById("doneTitle");
+  var doneStat = document.getElementById("doneStat");
+  var spillBtn = document.getElementById("spillBtn");
+  var countLabel = document.getElementById("bandCountLabel");
+
+  var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var HINTS = {
+    solo: "Drag each band into its color",
+    race: "Shared plate. Bank bands into your own box. Most banked wins",
+    split: "Your plate, your box. First to sort everything wins",
+    turns: "Take turns sorting a full spill. Fastest time wins"
+  };
+
+  /* ---- state ---- */
+  var mode = "solo";
+  var totalBands = 40;
+  var piles = [];      /* { plateEl, bands: [], sorted: 0, owner } */
+  var boxes = [];      /* { el, labelEl, owner, banked, cells: [{el, color, count, countEl, box}] } */
+  var drags = new Map();   /* pointerId -> band */
+  var zTop = 10;
+  var cellRects = [];
+  var sortedCount = 0;
+  var gameOver = false;
+  var hintDismissed = false;
+  var turnIndex = 0;       /* turns mode: whose run is in progress */
+  var runTimes = [null, null];
+  var splitFinished = [false, false];
+
+  function rand(min, max) { return min + Math.random() * (max - min); }
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  function ringSVG(hex, size, seed) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 64 64");
+    if (size) { svg.style.width = size + "px"; svg.style.height = size + "px"; }
+    var rx = 19 + seed() * 5;
+    var ry = 19 + seed() * 5;
+    var tilt = seed() * 180;
+    var stroke = 8.5 + seed() * 1.5;
+    var mk = function (color, width, extra) {
+      var el = document.createElementNS(ns, "ellipse");
+      el.setAttribute("cx", 32); el.setAttribute("cy", 32);
+      el.setAttribute("rx", rx); el.setAttribute("ry", ry);
+      el.setAttribute("fill", "none");
+      el.setAttribute("stroke", color);
+      el.setAttribute("stroke-width", width);
+      el.setAttribute("transform", "rotate(" + tilt + " 32 32)");
+      if (extra) extra(el);
+      return el;
+    };
+    svg.appendChild(mk("rgba(0,0,0,0.18)", stroke + 1.6));
+    svg.appendChild(mk(hex, stroke));
+    svg.appendChild(mk("rgba(255,255,255,0.55)", 2.4, function (el) {
+      el.setAttribute("stroke-linecap", "round");
+      el.setAttribute("stroke-dasharray", "26 200");
+      el.setAttribute("stroke-dashoffset", -seed() * 60);
+    }));
+    return svg;
+  }
+
+  /* ---- sound ---- */
+  var audioCtx = null;
+  var soundOn = true;
+  var soundBtn = document.getElementById("soundBtn");
+  soundBtn.addEventListener("click", function () {
+    soundOn = !soundOn;
+    soundBtn.textContent = "sound: " + (soundOn ? "on" : "off");
+  });
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { audioCtx = null; }
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  }
+  function blip(freq, dur, vol, type) {
+    if (!soundOn || !audioCtx) return;
+    var t = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    var lp = audioCtx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 2200;
+    osc.type = type || "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(lp); lp.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+  function playLand(cellIndex) {
+    var base = 440 * Math.pow(2, (cellIndex % 12) / 24);
+    blip(base, 0.16, 0.06);
+    setTimeout(function () { blip(base * 1.5, 0.22, 0.045); }, 55);
+  }
+  function playNope() { blip(150, 0.12, 0.03, "triangle"); }
+  function playPickup() { blip(660, 0.05, 0.015); }
+
+  /* ---- stopwatch ---- */
+  var timerStartMs = null;
+  var timerTick = null;
+  var finalTime = "";
+  function formatTime(ms) {
+    var s = Math.floor(ms / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+  /* tenths shown where runs are compared, so a close finish reads as a real result */
+  function formatTimeFine(ms) {
+    return formatTime(ms) + "." + Math.floor((ms % 1000) / 100);
+  }
+  function startTimer() {
+    if (timerStartMs !== null || gameOver) return;
+    timerStartMs = Date.now();
+    timerEl.textContent = "0:00";
+    timerTick = setInterval(function () {
+      timerEl.textContent = formatTime(Date.now() - timerStartMs);
+    }, 1000);
+  }
+  function elapsedNow() {
+    return timerStartMs === null ? 0 : Date.now() - timerStartMs;
+  }
+  function stopTimer() {
+    if (timerTick) { clearInterval(timerTick); timerTick = null; }
+    if (timerStartMs !== null) {
+      finalTime = formatTime(elapsedNow());
+      timerEl.textContent = finalTime;
+    }
+  }
+  function resetTimer() {
+    stopTimer();
+    timerStartMs = null;
+    finalTime = "";
+    timerEl.textContent = "";
+  }
+
+  /* ---- layout per mode ---- */
+  function playerLabel(i) { return "Player " + (i + 1); }
+
+  function makeBoxWrap(owner) {
+    var wrap = document.createElement("div");
+    wrap.className = "boxwrap";
+    var label = document.createElement("div");
+    label.className = "boxlabel";
+    var el = document.createElement("div");
+    el.className = "pbox";
+    wrap.appendChild(label);
+    wrap.appendChild(el);
+    return { wrap: wrap, el: el, labelEl: label, owner: owner, banked: 0, cells: [] };
+  }
+
+  function makePlate(owner) {
+    var el = document.createElement("div");
+    el.className = "plate";
+    return { plateEl: el, bands: [], sorted: 0, owner: owner };
+  }
+
+  function buildStage() {
+    stage.innerHTML = "";
+    stage.className = "mode-" + mode;
+    piles = [];
+    boxes = [];
+
+    if (mode === "race") {
+      var b1 = makeBoxWrap(0), b2 = makeBoxWrap(1);
+      var pile = makePlate(-1);
+      stage.appendChild(b1.wrap);
+      stage.appendChild(pile.plateEl);
+      stage.appendChild(b2.wrap);
+      boxes = [b1, b2];
+      piles = [pile];
+    } else if (mode === "split") {
+      for (var i = 0; i < 2; i++) {
+        var half = document.createElement("div");
+        half.className = "half";
+        var p = makePlate(i);
+        var bx = makeBoxWrap(i);
+        half.appendChild(p.plateEl);
+        half.appendChild(bx.wrap);
+        stage.appendChild(half);
+        piles.push(p);
+        boxes.push(bx);
+      }
+    } else {
+      /* solo and turns */
+      var sp = makePlate(0);
+      var sb = makeBoxWrap(0);
+      stage.appendChild(sp.plateEl);
+      stage.appendChild(sb.wrap);
+      piles = [sp];
+      boxes = [sb];
+    }
+
+    /* same color arrangement in every box so a 2P race is fair */
+    var order = shuffle(COLORS.slice());
+    boxes.forEach(function (box) {
+      box.el.innerHTML = "";
+      box.cells = [];
+      order.forEach(function (color) {
+        var el = document.createElement("div");
+        el.className = "cell";
+        el.style.setProperty("--hot-color", color.hex);
+        var ghost = document.createElement("div");
+        ghost.className = "ghost";
+        ghost.appendChild(ringSVG(color.hex, 42, function () { return 0.5; }));
+        el.appendChild(ghost);
+        var count = document.createElement("span");
+        count.className = "count";
+        el.appendChild(count);
+        box.el.appendChild(el);
+        box.cells.push({ el: el, color: color, count: 0, countEl: count, box: box });
+      });
+    });
+    updateBoxLabels();
+  }
+
+  function updateBoxLabels() {
+    boxes.forEach(function (box) {
+      if (mode === "race") {
+        box.labelEl.textContent = playerLabel(box.owner) + " · " + box.banked + " banked";
+      } else if (mode === "split") {
+        var left = totalBands - piles[box.owner].sorted;
+        box.labelEl.textContent = playerLabel(box.owner) + " · " + left + " left";
+      } else if (mode === "turns") {
+        box.labelEl.textContent = playerLabel(turnIndex) + "'s spill";
+      } else {
+        box.labelEl.textContent = "";
+      }
+    });
+  }
+
+  /* ---- bands ---- */
+  function makeBandList(n) {
+    var list = [];
+    var base = Math.floor(n / COLORS.length);
+    for (var i = 0; i < base; i++) {
+      COLORS.forEach(function (c) { list.push(c); });
+    }
+    shuffle(COLORS.slice()).slice(0, n - list.length)
+      .forEach(function (c) { list.push(c); });
+    return shuffle(list);
+  }
+
+  function platePoint(pile, angleFrac, radiusFrac) {
+    var r = pile.plateEl.getBoundingClientRect();
+    var cx = r.left + r.width / 2;
+    var cy = r.top + r.height / 2;
+    var maxR = Math.max(10, r.width / 2 - BAND_SIZE * 0.75);
+    var a = angleFrac * Math.PI * 2;
+    var d = Math.sqrt(radiusFrac) * maxR;
+    return { x: cx + Math.cos(a) * d - BAND_SIZE / 2, y: cy + Math.sin(a) * d - BAND_SIZE / 2 };
+  }
+
+  function applyTransform(b, scale) {
+    b.el.style.transform =
+      "translate(" + b.x + "px," + b.y + "px) rotate(" + b.rot + "deg)" +
+      (scale && scale !== 1 ? " scale(" + scale + ")" : "");
+  }
+
+  function renderBand(b, fadeIn) {
+    var el = document.createElement("div");
+    el.className = "band";
+    el.appendChild(ringSVG(b.color.hex, null, Math.random));
+    b.el = el;
+    var p = platePoint(b.pile, b.angleFrac, b.radiusFrac);
+    b.x = p.x; b.y = p.y;
+    applyTransform(b);
+    attachDrag(b);
+    stage.appendChild(el);
+    if (fadeIn && !reducedMotion) {
+      el.animate(
+        [{ opacity: 0, transform: el.style.transform + " scale(0.6)" },
+         { opacity: 1 }],
+        { duration: 260, easing: "ease-out" }
+      );
+    }
+  }
+
+  function buildPiles() {
+    document.querySelectorAll(".band").forEach(function (el) { el.remove(); });
+    piles.forEach(function (pile) {
+      pile.sorted = 0;
+      pile.bands = makeBandList(totalBands).map(function (color) {
+        return {
+          el: null,
+          color: color,
+          pile: pile,
+          angleFrac: Math.random(),
+          radiusFrac: Math.random(),
+          rot: rand(-40, 40),
+          x: 0, y: 0,
+          sorted: false,
+          hotCell: null
+        };
+      });
+      pile.bands.slice(0, VISIBLE_CAP).forEach(function (b) { renderBand(b, false); });
+    });
+  }
+
+  function spawnNext(pile) {
+    for (var i = 0; i < pile.bands.length; i++) {
+      var b = pile.bands[i];
+      if (!b.el && !b.sorted) { renderBand(b, true); return; }
+    }
+  }
+
+  function repositionPiles() {
+    piles.forEach(function (pile) {
+      pile.bands.forEach(function (b) {
+        if (!b.el || b.sorted || isDragged(b)) return;
+        var p = platePoint(pile, b.angleFrac, b.radiusFrac);
+        b.x = p.x; b.y = p.y;
+        applyTransform(b);
+      });
+    });
+  }
+  window.addEventListener("resize", repositionPiles);
+
+  function isDragged(b) {
+    var found = false;
+    drags.forEach(function (v) { if (v === b) found = true; });
+    return found;
+  }
+
+  /* ---- drag: pointer events, one path, any number of fingers ---- */
+  function snapshotCellRects() {
+    cellRects = [];
+    boxes.forEach(function (box) {
+      box.cells.forEach(function (c) {
+        var r = c.el.getBoundingClientRect();
+        cellRects.push({ cell: c, left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+      });
+    });
+  }
+
+  function cellAt(x, y) {
+    for (var i = 0; i < cellRects.length; i++) {
+      var r = cellRects[i];
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return r.cell;
+    }
+    return null;
+  }
+
+  function setHot(b, cell) {
+    if (b.hotCell === cell) return;
+    if (b.hotCell) b.hotCell.el.classList.remove("hot");
+    b.hotCell = cell;
+    if (b.hotCell) b.hotCell.el.classList.add("hot");
+  }
+
+  function attachDrag(b) {
+    b.el.addEventListener("pointerdown", function (e) {
+      if (b.sorted || isDragged(b) || gameOver) return;
+      e.preventDefault();
+      ensureAudio();
+      startTimer();
+      drags.set(e.pointerId, b);
+      b.grabDX = e.clientX - b.x;
+      b.grabDY = e.clientY - b.y;
+      b.el.style.zIndex = ++zTop;
+      b.el.classList.add("lifted");
+      applyTransform(b, 1.15);
+      snapshotCellRects();
+      try { b.el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointers lack capture */ }
+      playPickup();
+    });
+
+    b.el.addEventListener("pointermove", function (e) {
+      if (drags.get(e.pointerId) !== b) return;
+      b.x = e.clientX - b.grabDX;
+      b.y = e.clientY - b.grabDY;
+      applyTransform(b, 1.15);
+      setHot(b, cellAt(e.clientX, e.clientY));
+    });
+
+    b.el.addEventListener("pointerup", function (e) {
+      if (drags.get(e.pointerId) !== b) return;
+      drags.delete(e.pointerId);
+      endDrag(b, cellAt(e.clientX, e.clientY));
+    });
+
+    b.el.addEventListener("pointercancel", function (e) {
+      if (drags.get(e.pointerId) !== b) return;
+      drags.delete(e.pointerId);
+      endDrag(b, null);
+    });
+  }
+
+  function dropAllowed(b, cell) {
+    if (cell.color.name !== b.color.name) return false;
+    /* split: you may only bank into your own box */
+    if (mode === "split" && cell.box.owner !== b.pile.owner) return false;
+    return true;
+  }
+
+  function endDrag(b, targetCell) {
+    setHot(b, null);
+    b.el.classList.remove("lifted");
+    if (targetCell && dropAllowed(b, targetCell) && !gameOver) {
+      landBand(b, targetCell);
+    } else {
+      if (targetCell) {
+        targetCell.el.classList.remove("nudge");
+        void targetCell.el.offsetWidth;
+        targetCell.el.classList.add("nudge");
+        playNope();
+      }
+      returnToPlate(b);
+    }
+  }
+
+  function returnToPlate(b) {
+    var p = platePoint(b.pile, b.angleFrac, b.radiusFrac);
+    var from = "translate(" + b.x + "px," + b.y + "px) rotate(" + b.rot + "deg) scale(1.15)";
+    b.x = p.x; b.y = p.y;
+    b.rot = rand(-40, 40);
+    var to = "translate(" + b.x + "px," + b.y + "px) rotate(" + b.rot + "deg)";
+    if (reducedMotion) { applyTransform(b); return; }
+    b.el.animate(
+      [{ transform: from }, { transform: to }],
+      { duration: 420, easing: "cubic-bezier(0.25, 0.9, 0.35, 1)" }
+    );
+    applyTransform(b);
+  }
+
+  function landBand(b, cell) {
+    b.sorted = true;
+    var r = cell.el.getBoundingClientRect();
+    var tx = r.left + r.width / 2 - BAND_SIZE / 2 + rand(-8, 8);
+    var ty = r.top + r.height / 2 - BAND_SIZE / 2 + rand(-6, 6);
+    var from = "translate(" + b.x + "px," + b.y + "px) rotate(" + b.rot + "deg) scale(1.15)";
+    var endRot = rand(-30, 30);
+    var at = function (s) {
+      return "translate(" + tx + "px," + ty + "px) rotate(" + endRot + "deg) scale(" + s + ")";
+    };
+
+    var finished = false;
+    var finish = function () {
+      if (finished) return;
+      finished = true;
+      b.el.remove();
+      b.el = null;
+      settleIntoCell(cell);
+      playLand(cell.box.cells.indexOf(cell));
+      b.pile.sorted++;
+      cell.box.banked++;
+      sortedCount++;
+      updateProgress();
+      updateBoxLabels();
+      dismissHint();
+      spawnNext(b.pile);
+      checkEnd(b);
+    };
+
+    if (reducedMotion) { finish(); return; }
+    var anim = b.el.animate(
+      [
+        { transform: from, offset: 0 },
+        { transform: at(1.06), offset: 0.55 },
+        { transform: at(0.9), offset: 0.78 },
+        { transform: at(1), offset: 1 }
+      ],
+      { duration: 340, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" }
+    );
+    anim.onfinish = finish;
+    /* safety net: never let a stalled animation strand the game state */
+    setTimeout(finish, 600);
+  }
+
+  function settleIntoCell(cell) {
+    cell.count++;
+    cell.el.classList.add("filled");
+    cell.countEl.textContent = "×" + cell.count;
+    if (cell.count <= 6) {
+      var mini = document.createElement("div");
+      mini.className = "mini";
+      var size = 30;
+      mini.appendChild(ringSVG(cell.color.hex, size, Math.random));
+      var w = cell.el.clientWidth, h = cell.el.clientHeight;
+      mini.style.left = (w / 2 - size / 2 + rand(-w * 0.18, w * 0.18)) + "px";
+      mini.style.top = (h / 2 - size / 2 + rand(-h * 0.16, h * 0.16)) + "px";
+      mini.style.transform = "rotate(" + rand(-45, 45) + "deg)";
+      cell.el.appendChild(mini);
+    }
+    cell.el.classList.remove("pop");
+    void cell.el.offsetWidth;
+    cell.el.classList.add("pop");
+  }
+
+  /* ---- end conditions per mode ---- */
+  function checkEnd(b) {
+    if (gameOver) return;
+    if (mode === "solo") {
+      if (sortedCount === totalBands) {
+        endGame("Every band is home.",
+          totalBands + " bands, back where they belong" + (timeText() ? " in " + timeText() : "") + ".",
+          "Spill again");
+      }
+    } else if (mode === "race") {
+      if (sortedCount === totalBands) {
+        var s0 = boxes[0].banked, s1 = boxes[1].banked;
+        var title = s0 === s1 ? "Dead even." : playerLabel(s0 > s1 ? 0 : 1) + " takes it.";
+        endGame(title,
+          playerLabel(0) + " banked " + s0 + ", " + playerLabel(1) + " banked " + s1 +
+          (timeText() ? ".\nPlate cleared in " + timeText() + "." : "."),
+          "Spill again");
+      }
+    } else if (mode === "split") {
+      var owner = b.pile.owner;
+      if (b.pile.sorted === totalBands && !splitFinished[owner]) {
+        splitFinished[owner] = true;
+        var other = 1 - owner;
+        endGame(playerLabel(owner) + " finishes first.",
+          (timeText() ? "Sorted all " + totalBands + " in " + timeText() + ". " : "") +
+          playerLabel(other) + " had " + (totalBands - piles[other].sorted) + " left.",
+          "Rematch");
+      }
+    } else if (mode === "turns") {
+      if (sortedCount === totalBands) {
+        stopTimer();
+        runTimes[turnIndex] = elapsedNow();
+        if (turnIndex === 0) {
+          showCard(playerLabel(0) + ": " + formatTimeFine(runTimes[0]),
+            playerLabel(1) + ", the next spill is yours.",
+            "Start " + playerLabel(1));
+          gameOver = true;
+        } else {
+          var w = runTimes[0] === runTimes[1] ? -1 : (runTimes[0] < runTimes[1] ? 0 : 1);
+          endGame(w < 0 ? "Dead even." : playerLabel(w) + " takes it.",
+            playerLabel(0) + ": " + formatTimeFine(runTimes[0]) + "\n" +
+            playerLabel(1) + ": " + formatTimeFine(runTimes[1]),
+            "Play again");
+        }
+      }
+    }
+  }
+
+  function timeText() { return finalTime || (timerStartMs !== null ? formatTime(elapsedNow()) : ""); }
+
+  function endGame(title, stat, buttonText) {
+    gameOver = true;
+    stopTimer();
+    setTimeout(function () { showCard(title, stat, buttonText); }, reducedMotion ? 150 : 700);
+  }
+
+  function showCard(title, stat, buttonText) {
+    doneTitle.textContent = title;
+    doneStat.textContent = stat;
+    spillBtn.textContent = buttonText;
+    doneEl.classList.add("show");
+  }
+
+  spillBtn.addEventListener("click", function () {
+    doneEl.classList.remove("show");
+    if (mode === "turns" && turnIndex === 0 && runTimes[0] !== null && runTimes[1] === null) {
+      startNextTurn();
+    } else {
+      restart();
+    }
+  });
+
+  function startNextTurn() {
+    turnIndex = 1;
+    gameOver = false;
+    sortedCount = 0;
+    drags.clear();
+    resetTimer();
+    buildStage();
+    buildPiles();
+    updateProgress();
+    setHint(playerLabel(1) + "'s spill. " + HINTS.turns);
+  }
+
+  /* ---- ambient text ---- */
+  function updateProgress() {
+    if (mode === "split") {
+      progressEl.textContent = sortedCount + " of " + totalBands * 2 + " sorted";
+    } else {
+      progressEl.textContent = sortedCount + " of " + totalBands + " sorted";
+    }
+  }
+
+  function setHint(text) {
+    hint.textContent = text;
+    hint.classList.remove("gone");
+    hintDismissed = false;
+  }
+
+  function dismissHint() {
+    if (hintDismissed || mode === "turns") return;
+    hintDismissed = true;
+    hint.classList.add("gone");
+  }
+
+  /* ---- restart and controls ---- */
+  function restart() {
+    drags.clear();
+    sortedCount = 0;
+    gameOver = false;
+    turnIndex = 0;
+    runTimes = [null, null];
+    splitFinished = [false, false];
+    resetTimer();
+    doneEl.classList.remove("show");
+    buildStage();
+    buildPiles();
+    updateProgress();
+    updateCountLabel();
+    setHint(mode === "turns" ? playerLabel(0) + "'s spill. " + HINTS.turns : HINTS[mode]);
+  }
+
+  function updateCountLabel() {
+    countLabel.textContent = totalBands + (mode === "split" ? " each" : " bands");
+  }
+
+  function changeCount(delta) {
+    var next = Math.min(COUNT_MAX, Math.max(COUNT_MIN, totalBands + delta));
+    if (next === totalBands) return;
+    totalBands = next;
+    restart();
+  }
+  document.getElementById("fewerBtn").addEventListener("click", function () { changeCount(-COUNT_STEP); });
+  document.getElementById("moreBtn").addEventListener("click", function () { changeCount(COUNT_STEP); });
+
+  var modeBtns = document.querySelectorAll("#modes button");
+  modeBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      if (btn.dataset.mode === mode) return;
+      mode = btn.dataset.mode;
+      modeBtns.forEach(function (b) { b.classList.toggle("active", b === btn); });
+      restart();
+    });
+  });
+
+  restart();
+})();
+</script>
+
+</body>
+</html>
