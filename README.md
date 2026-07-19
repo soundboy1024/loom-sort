@@ -2,6 +2,8 @@
 
 A touch-first web game about sorting rainbow loom bands back into their organizer box. Based on a real spill, and on the discovery that re-sorting thousands of bands by color is genuinely calming.
 
+**Play it: https://soundboy1024.github.io/loom-sort/**
+
 Everything is one file, `index.html`. No build step, no dependencies, no network. Open it in a browser and play.
 
 ## How to play
